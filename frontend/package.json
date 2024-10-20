@@ -1,5 +1,5 @@
 {
-  "name": "lp-builder",
+  "name": "frontend",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -10,9 +10,9 @@
   },
   "dependencies": {
     "@grapesjs/react": "^1.0.0",
+    "frontend": "file:",
     "grapejs": "^2.1.2",
     "grapesjs": "^0.21.13",
-    "lp-builder": "file:",
     "next": "14.2.15",
     "react": "^18",
     "react-dom": "^18"
