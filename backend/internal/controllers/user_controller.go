@@ -1,8 +1,8 @@
 package controllers
 
 import (
-	"backend/src/api/models"
-	"backend/src/api/services"
+	"backend/internal/models"
+	"backend/internal/services"
 	"net/http"
 	"strconv"
 
@@ -17,6 +17,10 @@ func NewUserController(s *services.UserService) *UserController {
 	return &UserController{userService: s}
 }
 
+
+//////////////////////////////////////////////////
+///////////////////// GET ////////////////////////
+//////////////////////////////////////////////////
 func (ctrl *UserController) FindAll(c *gin.Context) {
 	users, err := ctrl.userService.FindAll()
 	if err != nil {
@@ -40,6 +44,9 @@ func (ctrl *UserController) FindOneById(c *gin.Context) {
 	c.JSON(http.StatusOK, user)
 }
 
+//////////////////////////////////////////////////
+//////////////////// POST ////////////////////////
+//////////////////////////////////////////////////
 func (ctrl *UserController) Create(c *gin.Context) {
 	var user models.User
 	if err := c.ShouldBindJSON(&user); err != nil {
@@ -53,6 +60,9 @@ func (ctrl *UserController) Create(c *gin.Context) {
 	c.JSON(http.StatusCreated, user)
 }
 
+//////////////////////////////////////////////////
+/////////////////// PATCH ////////////////////////
+//////////////////////////////////////////////////
 func (ctrl *UserController) Update(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
@@ -72,6 +82,9 @@ func (ctrl *UserController) Update(c *gin.Context) {
 	c.JSON(http.StatusOK, user)
 }
 
+//////////////////////////////////////////////////
+////////////////// DELETE ////////////////////////
+//////////////////////////////////////////////////
 func (ctrl *UserController) Delete(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {

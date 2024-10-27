@@ -1,18 +1,27 @@
-package database
+package config
 
 import (
 	"log"
 	"os"
 
+	"github.com/joho/godotenv"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
+
+func LoadConfig() {
+    err := godotenv.Load(".env")
+    if err != nil {
+        log.Fatal("Error loading .env file")
+    }
+    log.Println("Environment variables loaded successfully")
+}
 
 // DB is the global database connection variable.
 var DB *gorm.DB
 
 // Connect initializes the database connection.
-func Connect() {
+func InitDB() {
 	// Read environment variables for database configuration
 	DB_HOST := os.Getenv("DB_HOST")
 	DB_PORT := os.Getenv("DB_PORT")
