@@ -19,4 +19,15 @@ func RegisterRoutes(router *gin.Engine, container *services.ServiceContainer) {
         userRoutes.DELETE("/:id", userController.Delete)
     }
 
+    templateController:=  controllers.NewTemplateController(container.TemplateService)
+    templateRoutes := router.Group("/templates")
+    {
+        templateRoutes.GET("/", templateController.FindAll)
+        templateRoutes.GET("/:id", templateController.FindOneById)
+        templateRoutes.POST("/", templateController.Create)
+        templateRoutes.POST("/convert-url", templateController.ConvertUrlToFile)
+        templateRoutes.PATCH("/:id", templateController.Update)
+        templateRoutes.DELETE("/:id", templateController.Delete)
+    }
+
 }
