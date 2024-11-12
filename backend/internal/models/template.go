@@ -7,9 +7,12 @@ import (
 )
 
 type Template struct {
-  ID        uint           `gorm:"primaryKey" json:"id"`
-  Name      string         `json:"name"`
-  Type      string         `json:"type"`
+  ID          uint      `gorm:"primaryKey"`
+  OriginalURL string    `gorm:"type:text;not null"`
+  HTMLPath    string    `gorm:"type:text"`
+  FilePaths   string    `gorm:"type:jsonb"` 
+  Status      string    `gorm:"type:varchar(20)"`
+  ErrorMessage string   `gorm:"type:text"`
   CreatedAt time.Time      `json:"createdAt"`
   UpdatedAt time.Time      `json:"updatedAt"`
   DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`

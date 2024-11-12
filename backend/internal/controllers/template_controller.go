@@ -3,7 +3,6 @@ package controllers
 import (
 	"backend/internal/models"
 	"backend/internal/services"
-	"fmt"
 	"net/http"
 	"strconv"
 
@@ -54,28 +53,36 @@ func (ctrl *TemplateController) Create(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 	}
-	if err := ctrl.templateService.Create(template); err != nil {
+	if err := ctrl.templateService.Create(&template); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create template"})
 			return
 	}
 	c.JSON(http.StatusCreated, template)
 }
 
-func (ctrl *TemplateController) ConvertUrlToFile (c *gin.Context){
-	var request models.ConvertUrlToFile
-	var template models.Template
-
+func (ctrl *TemplateController) ConvertUrlToFile(c *gin.Context) {
+	var request struct {
+		URL string `json:"url" binding:"required"`
+	}
 	if err := c.ShouldBindJSON(&request); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Failed to bind JSON: %v", err.Error())})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
 		return
-}
+	}
 
-if err := ctrl.templateService.ConvertUrlToFile(template, request); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to convert URL to file: %v", err.Error())})
+	conversion := models.Template{}
+
+	if err := ctrl.templateService.ConvertUrlToFile(&conversion, request); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to convert URL", "details": err.Error()})
 		return
-}
+	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "URL converted and saved successfully", "template": template})
+	// Respond with success and metadata
+	c.JSON(http.StatusOK, gin.H{
+		"message":     "URL converted successfully",
+		"conversion":  conversion,
+		"html_path":   conversion.HTMLPath,
+		"file_paths":  conversion.FilePaths,
+	})
 }
 
 //////////////////////////////////////////////////

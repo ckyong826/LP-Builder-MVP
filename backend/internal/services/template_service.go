@@ -3,15 +3,17 @@ package services
 import (
 	"backend/internal/models"
 	"backend/internal/repositories"
-	"errors"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
-	"path"
+	"path/filepath"
+	"regexp"
 	"strings"
+	"time"
 
-	"golang.org/x/net/html"
 	"gorm.io/gorm"
 )
 
@@ -37,135 +39,171 @@ func (s *TemplateService) FindOneById(id uint) (models.Template, error) {
     return *template, nil
 }
 
-func (s *TemplateService) Create(template models.Template) error {
-    return s.repo.Create(&template)
+func (s *TemplateService) Create(template *models.Template) error {
+	return s.repo.Create(template)
 }
 
-func (s *TemplateService) ConvertUrlToFile(template models.Template, request models.ConvertUrlToFile) error {
-    // Fetch the webpage content
-    resp, err := http.Get(request.URL)
-    if err != nil {
-        return fmt.Errorf("failed to fetch URL: %v", err)
-    }
-    defer resp.Body.Close()
 
-    if resp.StatusCode != http.StatusOK {
-        return errors.New("failed to fetch URL content")
-    }
 
-    // Read the body content
-    body, err := io.ReadAll(resp.Body)
-    if err != nil {
-        return fmt.Errorf("failed to read URL content: %v", err)
-    }
+func (s *TemplateService) ConvertUrlToFile(template *models.Template, request models.ConvertUrlToFile) error {
+	// Step 1: Update the template status to "in_progress" and save to DB
+	template.OriginalURL = request.URL
+	template.Status = "in_progress"
+	template.CreatedAt = time.Now()
 
-    // Parse HTML content
-    doc, err := html.Parse(strings.NewReader(string(body)))
-    if err != nil {
-        return fmt.Errorf("failed to parse HTML: %v", err)
-    }
+	template.FilePaths="{}"
+	
+	if err := s.repo.Create(template); err != nil {
+		return fmt.Errorf("failed to initialize template record: %w", err)
+	}
 
-    // Process HTML to download images and CSS files
-    err = s.processHTML(doc, request.URL)
-    if err != nil {
-        return fmt.Errorf("failed to process HTML: %v", err)
-    }
+	// Step 2: Download HTML
+	html, err := s.getHTML(request.URL)
+	if err != nil {
+		template.Status = "failed"
+		template.ErrorMessage = fmt.Sprintf("failed to download HTML: %v", err)
+		s.repo.Update(template)
+		return err
+	}
 
-    // Save the processed HTML content to a file
-    outputPath := "output.html"
-    outFile, err := os.Create(outputPath)
-    if err != nil {
-        return fmt.Errorf("failed to create output file: %v", err)
-    }
-    defer outFile.Close()
-    html.Render(outFile, doc)
+	// Step 3: Save HTML and extract assets
+	baseDir := fmt.Sprintf("output/%d", template.ID)
+	err = os.MkdirAll(baseDir, os.ModePerm)
+	if err != nil {
+		template.Status = "failed"
+		template.ErrorMessage = fmt.Sprintf("failed to create output directory: %v", err)
+		s.repo.Update(template)
+		return err
+	}
 
-    // Update template metadata
-    template.Name = path.Base(outputPath)
-    template.Type = "Converted Page"
-    
-    // Use repo to save the template to the database
-    return s.repo.Create(&template)
+	htmlPath := filepath.Join(baseDir, "index.html")
+	err = os.WriteFile(htmlPath, []byte(html), os.ModePerm)
+	if err != nil {
+		template.Status = "failed"
+		template.ErrorMessage = fmt.Sprintf("failed to save HTML: %v", err)
+		s.repo.Update(template)
+		return err
+	}
+
+	// Step 4: Download assets and update file paths
+	assets := s.extractAssets(html)
+	filePaths, err := s.downloadAssets(baseDir, request.URL, assets)
+	if err != nil {
+		template.Status = "failed"
+		template.ErrorMessage = fmt.Sprintf("failed to download assets: %v", err)
+		s.repo.Update(template)
+		return err
+	}
+
+	// Step 5: Update template with paths and mark as "completed"
+	filePathsJson, _ := json.Marshal(filePaths)
+	template.Status = "completed"
+	template.HTMLPath = htmlPath
+	template.FilePaths = string(filePathsJson)
+	s.repo.Update(template)
+
+	return nil
 }
 
-// processHTML downloads images and CSS files, updating the HTML accordingly
-func (s *TemplateService) processHTML(n *html.Node, baseURL string) error {
-    if n.Type == html.ElementNode {
-        switch n.Data {
-        case "img":
-            for i := range n.Attr {
-                if n.Attr[i].Key == "src" {
-                    imgURL := n.Attr[i].Val
-                    localPath, err := s.downloadResource(imgURL, baseURL, "images")
-                    if err != nil {
-                        return err
-                    }
-                    n.Attr[i].Val = localPath
-                }
-            }
-        case "link":
-            for i := range n.Attr {
-                if n.Attr[i].Key == "href" && strings.Contains(n.Attr[i].Val, ".css") {
-                    cssURL := n.Attr[i].Val
-                    localPath, err := s.downloadResource(cssURL, baseURL, "css")
-                    if err != nil {
-                        return err
-                    }
-                    n.Attr[i].Val = localPath
-                }
-            }
-        }
-    }
+func (s *TemplateService) getHTML(url string) (string, error) {
+	resp, err := http.Get(url)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
 
-    // Recursively process child nodes
-    for c := n.FirstChild; c != nil; c = c.NextSibling {
-        if err := s.processHTML(c, baseURL); err != nil {
-            return err
-        }
-    }
-    return nil
+	body, err := io.ReadAll(resp.Body)
+	return string(body), err
 }
 
-// downloadResource fetches a resource (image or CSS) and saves it locally, returning the local path
-func (s *TemplateService) downloadResource(resourceURL, baseURL, folder string) (string, error) {
-    // Handle relative URLs
-    if !strings.HasPrefix(resourceURL, "http") {
-        if strings.HasPrefix(resourceURL, "/") {
-            resourceURL = baseURL + resourceURL
-        } else {
-            resourceURL = baseURL + "/" + resourceURL
-        }
-    }
+func (s *TemplateService) extractAssets(html string) []string {
+	var assets []string
+	patterns := []string{
+		`<link.*?href="(.*?\.css)"`,
+		`<script.*?src="(.*?\.js)"`,
+		`<img.*?src="(.*?\.(jpg|jpeg|png|gif|svg))"`,
+	}
+	for _, pattern := range patterns {
+		re := regexp.MustCompile(pattern)
+		matches := re.FindAllStringSubmatch(html, -1)
+		for _, match := range matches {
+			if len(match) > 1 {
+				assets = append(assets, match[1])
+			}
+		}
+	}
+	return assets
+}
 
-    // Fetch the resource
-    resp, err := http.Get(resourceURL)
-    if err != nil {
-        return "", fmt.Errorf("failed to download resource: %v", err)
-    }
-    defer resp.Body.Close()
+func (s *TemplateService) downloadAssets(baseDir string, baseURL string, assets []string) (map[string][]string, error) {
+	filePaths := map[string][]string{"css": {}, "js": {}, "images": {}}
 
-    if resp.StatusCode != http.StatusOK {
-        return "", fmt.Errorf("failed to download resource, status code: %d", resp.StatusCode)
-    }
+	// Parse the base URL
+	base, err := url.Parse(baseURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse base URL: %w", err)
+	}
 
-    // Create the folder if it doesn't exist
-    os.MkdirAll(folder, os.ModePerm)
+	for _, asset := range assets {
+		// Parse the asset URL relative to the base URL
+		assetURL, err := url.Parse(asset)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse asset URL %s: %w", asset, err)
+		}
 
-    // Save the resource
-    resourceName := path.Base(resourceURL)
-    resourcePath := path.Join(folder, resourceName)
-    outFile, err := os.Create(resourcePath)
-    if err != nil {
-        return "", fmt.Errorf("failed to create file: %v", err)
-    }
-    defer outFile.Close()
+		// Resolve the asset URL against the base URL
+		fullURL := base.ResolveReference(assetURL)
 
-    _, err = io.Copy(outFile, resp.Body)
-    if err != nil {
-        return "", fmt.Errorf("failed to save resource: %v", err)
-    }
+		// Determine the folder based on asset type
+		var folder string
+		var assetType string
+		if strings.HasSuffix(asset, ".css") {
+			folder = filepath.Join(baseDir, "css")
+			assetType = "css"
+		} else if strings.HasSuffix(asset, ".js") {
+			folder = filepath.Join(baseDir, "js")
+			assetType = "js"
+		} else {
+			folder = filepath.Join(baseDir, "images")
+			assetType = "images"
+		}
 
-    return resourcePath, nil
+		// Create the folder if it doesn't exist
+		err = os.MkdirAll(folder, os.ModePerm)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create folder %s: %w", folder, err)
+		}
+
+		// Determine the filename for saving the asset
+		filename := filepath.Join(folder, filepath.Base(assetURL.Path))
+
+		// Download the asset file and save it locally
+		err = s.downloadFile(fullURL.String(), filename)
+		if err != nil {
+			return nil, fmt.Errorf("failed to download asset %s: %w", fullURL.String(), err)
+		}
+
+		filePaths[assetType] = append(filePaths[assetType], filename)
+	}
+
+	return filePaths, nil
+}
+
+func (s *TemplateService) downloadFile(url, filepath string) error {
+	resp, err := http.Get(url)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	out, err := os.Create(filepath)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	_, err = io.Copy(out, resp.Body)
+	return err
 }
 
 func (s *TemplateService) Update(template models.Template) error {
