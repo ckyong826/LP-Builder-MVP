@@ -8,26 +8,29 @@ import (
 )
 
 func RegisterRoutes(router *gin.Engine, container *services.ServiceContainer) {
-	
+    // API version group
+    api := router.Group("/api")
+    
+    // User routes
     userController := controllers.NewUserController(container.UserService)
-    userRoutes := router.Group("/users")
+    users := api.Group("/users")
     {
-        userRoutes.GET("/", userController.FindAll)
-        userRoutes.GET("/:id", userController.FindOneById)
-        userRoutes.POST("/", userController.Create)
-        userRoutes.PATCH("/:id", userController.Update)
-        userRoutes.DELETE("/:id", userController.Delete)
+        users.GET("", userController.FindAll)
+        users.GET("/:id", userController.FindOneById)
+        users.POST("", userController.Create)
+        users.PUT("/:id", userController.Update)  // Changed from PATCH to PUT to match controller
+        users.DELETE("/:id", userController.Delete)
     }
 
-    templateController:=  controllers.NewTemplateController(container.TemplateService)
-    templateRoutes := router.Group("/templates")
+    // Template routes
+    templateController := controllers.NewTemplateController(container.TemplateService)
+    templates := api.Group("/templates")
     {
-        templateRoutes.GET("/", templateController.FindAll)
-        templateRoutes.GET("/:id", templateController.FindOneById)
-        templateRoutes.POST("/", templateController.Create)
-        templateRoutes.POST("/convert-url", templateController.ConvertUrlToFile)
-        templateRoutes.PATCH("/:id", templateController.Update)
-        templateRoutes.DELETE("/:id", templateController.Delete)
+        templates.GET("", templateController.FindAll)
+        templates.GET("/:id", templateController.FindOneById)
+        templates.POST("", templateController.Create)
+        templates.POST("/convert", templateController.ConvertUrlToFile)  // Changed URL to match controller
+        templates.PUT("/:id", templateController.Update)  // Changed from PATCH to PUT to match controller
+        templates.DELETE("/:id", templateController.Delete)
     }
-
 }

@@ -17,83 +17,121 @@ func NewUserController(s *services.UserService) *UserController {
 	return &UserController{userService: s}
 }
 
-
-//////////////////////////////////////////////////
-///////////////////// GET ////////////////////////
-//////////////////////////////////////////////////
 func (ctrl *UserController) FindAll(c *gin.Context) {
-	users, err := ctrl.userService.FindAll()
-	if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve users"})
-			return
+	var query models.PaginationQuery
+	if err := c.ShouldBindQuery(&query); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid pagination parameters"})
+		return
 	}
-	c.JSON(http.StatusOK, users)
+
+	users, total, err := ctrl.userService.FindAll(
+		c.Request.Context(),
+		query.Page,
+		query.PageSize,
+		query.OrderBy,
+		query.Sort,
+	)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"data":  users,
+		"total": total,
+		"page":  query.Page,
+		"size":  query.PageSize,
+	})
 }
 
 func (ctrl *UserController) FindOneById(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID"})
-			return
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID"})
+		return
 	}
-	user, err := ctrl.userService.FindOneById(uint(id))
+
+	user, err := ctrl.userService.FindOneById(c.Request.Context(), id)
 	if err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
-			return
+		status := http.StatusInternalServerError
+		if err.Error() == "user not found" {
+			status = http.StatusNotFound
+		}
+		c.JSON(status, gin.H{"error": err.Error()})
+		return
 	}
+
 	c.JSON(http.StatusOK, user)
 }
 
-//////////////////////////////////////////////////
-//////////////////// POST ////////////////////////
-//////////////////////////////////////////////////
 func (ctrl *UserController) Create(c *gin.Context) {
 	var user models.User
 	if err := c.ShouldBindJSON(&user); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
 	}
-	if err := ctrl.userService.Create(user); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
-			return
+
+	// Validate user data
+	if err := user.Validate(); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
 	}
+
+	if err := ctrl.userService.Create(c.Request.Context(), &user); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
 	c.JSON(http.StatusCreated, user)
 }
 
-//////////////////////////////////////////////////
-/////////////////// PATCH ////////////////////////
-//////////////////////////////////////////////////
 func (ctrl *UserController) Update(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID"})
-			return
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID"})
+		return
 	}
+
 	var user models.User
 	if err := c.ShouldBindJSON(&user); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
 	}
-	user.ID = uint(id)
-	if err := ctrl.userService.Update(user); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update user"})
-			return
+
+	// Validate user data
+	if err := user.Validate(); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
 	}
+
+	user.ID = id
+	if err := ctrl.userService.Update(c.Request.Context(), &user); err != nil {
+		status := http.StatusInternalServerError
+		if err.Error() == "user not found" {
+			status = http.StatusNotFound
+		}
+		c.JSON(status, gin.H{"error": err.Error()})
+		return
+	}
+
 	c.JSON(http.StatusOK, user)
 }
 
-//////////////////////////////////////////////////
-////////////////// DELETE ////////////////////////
-//////////////////////////////////////////////////
 func (ctrl *UserController) Delete(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID"})
-			return
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID"})
+		return
 	}
-	if err := ctrl.userService.Delete(uint(id)); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete user"})
-			return
+
+	if err := ctrl.userService.Delete(c.Request.Context(), id); err != nil {
+		status := http.StatusInternalServerError
+		if err.Error() == "user not found" {
+			status = http.StatusNotFound
+		}
+		c.JSON(status, gin.H{"error": err.Error()})
+		return
 	}
+
 	c.JSON(http.StatusOK, gin.H{"message": "User deleted successfully"})
 }

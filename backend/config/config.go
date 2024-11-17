@@ -1,44 +1,68 @@
 package config
 
 import (
+	"database/sql"
+	"fmt"
 	"log"
 	"os"
 
 	"github.com/joho/godotenv"
-	"gorm.io/driver/postgres"
-	"gorm.io/gorm"
+	_ "github.com/lib/pq"
 )
 
-func LoadConfig() {
+type Config struct {
+	DBHost     string
+	DBPort     string
+	DBUser     string
+	DBPassword string
+	DBName     string
+	Port       string
+}
+
+func LoadConfig() (*Config, error) {
     err := godotenv.Load(".env")
     if err != nil {
         log.Fatal("Error loading .env file")
     }
-    log.Println("Environment variables loaded successfully")
+
+    config := &Config{
+        DBHost:     getEnv("DB_HOST", "localhost"),
+        DBPort:     getEnv("DB_PORT", "5432"),
+        DBUser:     getEnv("DB_USER", "postgres"),
+        DBPassword: getEnv("DB_PASS", ""),
+        DBName:     getEnv("DB_NAME", "postgres"),
+        Port:       getEnv("PORT", "8080"),
+    }
+
+    return config, nil
 }
 
-// DB is the global database connection variable.
-var DB *gorm.DB
+func getEnv(key, defaultValue string) string {
+    if value := os.Getenv(key); value != "" {
+        return value
+    }
+    return defaultValue
+}
 
-// Connect initializes the database connection.
-func InitDB() {
-	// Read environment variables for database configuration
-	DB_HOST := os.Getenv("DB_HOST")
-	DB_PORT := os.Getenv("DB_PORT")
-	DB_USER := os.Getenv("DB_USER")
-	DB_PASSWORD := os.Getenv("DB_PASS")
-	DB_NAME := os.Getenv("DB_NAME")
+func (c *Config) GetDSN() string {
+    return fmt.Sprintf(
+        "host=%s port=%s user=%s password=%s dbname=%s sslmode=disable TimeZone=Asia/Kuala_Lumpur",
+        c.DBHost, c.DBPort, c.DBUser, c.DBPassword, c.DBName,
+    )
+}
 
-	// Create the Data Source Name (DSN) for the database connection
-	dsn := "host=" + DB_HOST + " user=" + DB_USER + " password=" + DB_PASSWORD + " dbname=" + DB_NAME + " port=" + DB_PORT + " sslmode=disable TimeZone=Asia/Kuala_Lumpur"
+// InitDB initializes the database connection
+func InitDB(cfg *Config) (*sql.DB, error) {
+    db, err := sql.Open("postgres", cfg.GetDSN())
+    if err != nil {
+        return nil, fmt.Errorf("error connecting to the database: %w", err)
+    }
 
-	log.Println(DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME)
-	// Attempt to connect to the database
-	var err error
-	DB, err = gorm.Open(postgres.Open(dsn), &gorm.Config{})
-	if err != nil {
-		log.Fatal("Failed to connect to the database:", err)
-	}
+    // Test the connection
+    if err := db.Ping(); err != nil {
+        return nil, fmt.Errorf("error connecting to the database: %w", err)
+    }
 
-	log.Println("Database connection established")
+    log.Println("Database connection established")
+    return db, nil
 }

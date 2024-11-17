@@ -10,8 +10,13 @@
   },
   "dependencies": {
     "@grapesjs/react": "^1.0.0",
+    "@radix-ui/react-dialog": "^1.1.2",
+    "@radix-ui/react-slot": "^1.1.0",
     "@silexlabs/grapesjs-fonts": "^1.0.20",
     "@silexlabs/grapesjs-symbols": "^1.0.43",
+    "axios": "^1.7.7",
+    "class-variance-authority": "^0.7.0",
+    "clsx": "^2.1.1",
     "frontend": "file:",
     "grapesjs": "^0.22.3",
     "grapesjs-blocks-basic": "^1.0.2",
@@ -24,11 +29,15 @@
     "grapesjs-style-bg": "^2.0.2",
     "grapesjs-tabs": "^1.0.6",
     "grapesjs-tooltip": "^0.1.8",
+    "lucide-react": "^0.460.0",
     "next": "14.2.17",
     "react": "^18",
-    "react-dom": "^18"
+    "react-dom": "^18",
+    "tailwind-merge": "^2.5.4",
+    "tailwindcss-animate": "^1.0.7"
   },
   "devDependencies": {
+    "@shadcn/ui": "^0.0.4",
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
