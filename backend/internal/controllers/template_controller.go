@@ -17,6 +17,10 @@ func NewTemplateController(s *services.TemplateService) *TemplateController {
 	return &TemplateController{templateService: s}
 }
 
+//////////////
+// GET Methods
+//////////////
+
 func (ctrl *TemplateController) FindAll(c *gin.Context) {
 	var query models.PaginationQuery
 	if err := c.ShouldBindQuery(&query); err != nil {
@@ -60,6 +64,10 @@ func (ctrl *TemplateController) FindOneById(c *gin.Context) {
 	c.JSON(http.StatusOK, template)
 }
 
+///////////////
+// POST Methods
+///////////////
+
 func (ctrl *TemplateController) Create(c *gin.Context) {
 	var template models.Template
 	if err := c.ShouldBindJSON(&template); err != nil {
@@ -96,6 +104,10 @@ func (ctrl *TemplateController) ConvertUrlToFile(c *gin.Context) {
 	})
 }
 
+///////////////
+// PUT Methods
+///////////////
+
 func (ctrl *TemplateController) Update(c *gin.Context) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
@@ -117,6 +129,10 @@ func (ctrl *TemplateController) Update(c *gin.Context) {
 
 	c.JSON(http.StatusOK, template)
 }
+
+//////////////////
+// DELETE Methods
+//////////////////
 
 func (ctrl *TemplateController) Delete(c *gin.Context) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)

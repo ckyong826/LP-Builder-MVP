@@ -2,12 +2,16 @@ package routes
 
 import (
 	"backend/internal/controllers"
+	"backend/internal/middleware"
 	"backend/internal/services"
 
 	"github.com/gin-gonic/gin"
 )
 
 func RegisterRoutes(router *gin.Engine, container *services.ServiceContainer) {
+    // CORS middleware
+    router.Use(middleware.CORS())
+
     // API version group
     api := router.Group("/api")
     

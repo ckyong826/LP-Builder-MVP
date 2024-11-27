@@ -1,9 +1,5 @@
 import { ApiService } from "../apiService";
-import {
-  Template,
-  ConvertUrlRequest,
-  ConvertUrlResponse,
-} from "@/types/models";
+import { Template, ConvertUrlResponse } from "@/types/models";
 import { API_ENDPOINTS } from "../constants";
 
 class TemplateService extends ApiService<Template> {
@@ -12,13 +8,16 @@ class TemplateService extends ApiService<Template> {
   }
 
   async convertUrl(url: string): Promise<ConvertUrlResponse> {
-    return this.post<ConvertUrlResponse>(API_ENDPOINTS.templates.convert.path, {
-      url,
-    });
+    const response = await this.post<ConvertUrlResponse>(
+      API_ENDPOINTS.templates.convert.path,
+      { url }
+    );
+    return response;
   }
-
-  async fetchContent(path: string): Promise<string> {
-    return this.get<string>(path);
+  async fetchContent(htmlPath: string): Promise<string> {
+    // This method should fetch the HTML content using the html_path received from convertUrl
+    const response = await this.get<string>(htmlPath);
+    return response;
   }
 }
 
