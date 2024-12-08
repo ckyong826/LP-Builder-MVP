@@ -90,6 +90,27 @@ func (s *TemplateService) FindOneById(ctx context.Context, id int64) (*models.Te
     return t, nil
 }
 
+func (s *TemplateService) FindOneByUrl(ctx context.Context, url string) (*models.Template, error) {
+    t := &models.Template{}
+    err := s.db.QueryRowContext(ctx, `
+        SELECT id, original_url, html_path, file_paths, status, error_message, 
+               created_at, updated_at, deleted_at 
+        FROM templates 
+        WHERE original_url = $1 AND deleted_at IS NULL
+        ORDER BY created_at DESC
+        LIMIT 1`, url).Scan(
+        &t.ID, &t.OriginalURL, &t.HTMLPath, &t.FilePaths,
+        &t.Status, &t.ErrorMessage, &t.CreatedAt, &t.UpdatedAt, &t.DeletedAt,
+    )
+    if err == sql.ErrNoRows {
+        return nil, nil
+    }
+    if err != nil {
+        return nil, fmt.Errorf("query error: %w", err)
+    }
+    return t, nil
+}
+
 func (s *TemplateService) Create(ctx context.Context, template *models.Template) error {
     template.CreatedAt = time.Now()
     if template.Status == "" {
@@ -160,6 +181,15 @@ func (s *TemplateService) Delete(ctx context.Context, id int64) error {
 
 // Your ConvertUrlToFile and its helper functions
 func (s *TemplateService) ConvertUrlToFile(ctx context.Context, template *models.Template, request models.ConvertUrlToFile) error {
+    existingTemplate, err := s.FindOneByUrl(ctx, request.URL)
+    if err != nil {
+        return fmt.Errorf("failed to check existing template: %w", err)
+    }
+    if existingTemplate != nil {
+        template.ID = existingTemplate.ID
+        return nil
+    }
+    
     // Initialize template
     template.OriginalURL = request.URL
     template.Status = models.StatusProgress
@@ -307,4 +337,60 @@ func (s *TemplateService) downloadFile(url, filepath string) error {
 
     _, err = io.Copy(out, resp.Body)
     return err
+}
+
+func (s *TemplateService) GetTemplateContent(ctx context.Context, templateID int64) (*models.FileContent, error) {
+    // Get template record
+    template, err := s.FindOneById(ctx, templateID)
+    if err != nil {
+        return nil, fmt.Errorf("failed to find template: %w", err)
+    }
+
+    content := &models.FileContent{
+        CSS:    make(map[string]string),
+        JS:     make(map[string]string),
+        Images: make(map[string][]byte),
+    }
+
+    // Read HTML content
+    htmlContent, err := os.ReadFile(template.HTMLPath)
+    if err != nil {
+        return nil, fmt.Errorf("failed to read HTML file: %w", err)
+    }
+    content.HTML = string(htmlContent)
+
+    // Parse FilePaths JSON
+    var filePaths map[string][]string
+    if err := json.Unmarshal([]byte(template.FilePaths), &filePaths); err != nil {
+        return nil, fmt.Errorf("failed to parse file paths: %w", err)
+    }
+
+    // Read CSS files
+    for _, path := range filePaths["css"] {
+        cssContent, err := os.ReadFile(path)
+        if err != nil {
+            return nil, fmt.Errorf("failed to read CSS file %s: %w", path, err)
+        }
+        content.CSS[filepath.Base(path)] = string(cssContent)
+    }
+
+    // Read JS files
+    for _, path := range filePaths["js"] {
+        jsContent, err := os.ReadFile(path)
+        if err != nil {
+            return nil, fmt.Errorf("failed to read JS file %s: %w", path, err)
+        }
+        content.JS[filepath.Base(path)] = string(jsContent)
+    }
+
+    // Read image files
+    for _, path := range filePaths["images"] {
+        imgContent, err := os.ReadFile(path)
+        if err != nil {
+            return nil, fmt.Errorf("failed to read image file %s: %w", path, err)
+        }
+        content.Images[filepath.Base(path)] = imgContent
+    }
+
+    return content, nil
 }

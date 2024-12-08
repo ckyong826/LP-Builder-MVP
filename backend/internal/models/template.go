@@ -17,6 +17,14 @@ type Template struct {
     DeletedAt    sql.NullTime   `json:"deleted_at,omitempty"`
 }
 
+type FileContent struct {
+	HTML   string            `json:"html"`
+	CSS    map[string]string `json:"css"`
+	JS     map[string]string `json:"js"`
+	Images map[string][]byte `json:"images"`
+}
+
+
 // ConvertUrlToFile represents the request payload for URL conversion
 type ConvertUrlToFile struct {
 	URL string `json:"url" binding:"required"`

@@ -64,6 +64,25 @@ func (ctrl *TemplateController) FindOneById(c *gin.Context) {
 	c.JSON(http.StatusOK, template)
 }
 
+func (ctrl *TemplateController) GetTemplateContent(c *gin.Context) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID"})
+			return
+	}
+
+	content, err := ctrl.templateService.GetTemplateContent(c.Request.Context(), id)
+	if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+					"error": "Failed to retrieve template content",
+					"details": err.Error(),
+			})
+			return
+	}
+
+	c.JSON(http.StatusOK, content)
+}
+
 ///////////////
 // POST Methods
 ///////////////
@@ -85,6 +104,7 @@ func (ctrl *TemplateController) Create(c *gin.Context) {
 
 func (ctrl *TemplateController) ConvertUrlToFile(c *gin.Context) {
 	var request models.ConvertUrlToFile
+	
 	if err := c.ShouldBindJSON(&request); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
 		return
@@ -97,6 +117,7 @@ func (ctrl *TemplateController) ConvertUrlToFile(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
+		"id":          template.ID,
 		"message":     "URL converted successfully",
 		"conversion":  template,
 		"html_path":   template.HTMLPath,

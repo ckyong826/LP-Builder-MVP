@@ -36,10 +36,12 @@ export default function CustomEditor() {
     });
   };
 
-  const handleImport = async (
-    htmlContent: string,
-    assets: { css: string[]; js: string[]; images: string[] }
-  ) => {
+  const handleImport = async (content: {
+    html: string;
+    css: Record<string, string>;
+    js: Record<string, string>;
+    images: Record<string, Uint8Array<ArrayBufferLike>>;
+  }) => {
     if (!editor) return;
 
     try {
@@ -48,34 +50,34 @@ export default function CustomEditor() {
       editor.setStyle("");
 
       // Load CSS files
-      const cssPromises = assets.css.map(async (cssPath) => {
-        const response = await fetch(cssPath);
-        const cssContent = await response.text();
-        editor.setStyle(cssContent);
-      });
+      const cssPromises = Object.entries(content.css).map(
+        async ([cssPath, cssContent]) => {
+          editor.setStyle(cssContent);
+        }
+      );
 
       // Load JS files
-      const jsPromises = assets.js.map(async (jsPath) => {
-        const response = await fetch(jsPath);
-        const jsContent = await response.text();
-        editor.Components.addComponent({
-          type: "script",
-          content: jsContent,
-        });
-      });
+      const jsPromises = Object.entries(content.js).map(
+        async ([jsPath, jsContent]) => {
+          editor.Components.addComponent({
+            type: "script",
+            content: jsContent,
+          });
+        }
+      );
 
       // Process images in HTML
-      assets.images.forEach((imagePath) => {
+      Object.entries(content.images).forEach(([imagePath, imageContent]) => {
         const filename = imagePath.split("/").pop();
         // Replace image paths in HTML content
-        htmlContent = htmlContent.replace(
+        content.html = content.html.replace(
           new RegExp(filename as string, "g"),
           imagePath
         );
       });
 
       // Load HTML content
-      editor.setComponents(htmlContent);
+      editor.setComponents(content.html);
 
       // Wait for all assets to load
       await Promise.all([...cssPromises, ...jsPromises]);

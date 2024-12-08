@@ -21,5 +21,6 @@ export const API_ENDPOINTS = {
     update: { path: "/api/templates/:id", method: "PUT" },
     delete: { path: "/api/templates/:id", method: "DELETE" },
     convert: { path: "/api/templates/convert", method: "POST" },
+    fetchContent: { path: "/api/templates/:id/content", method: "GET" },
   },
 } as const;

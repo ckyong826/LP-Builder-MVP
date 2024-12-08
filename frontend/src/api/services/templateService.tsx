@@ -1,6 +1,7 @@
 import { ApiService } from "../apiService";
 import { Template, ConvertUrlResponse } from "@/types/models";
 import { API_ENDPOINTS } from "../constants";
+import { replaceParams } from "@/lib/utils";
 
 class TemplateService extends ApiService<Template> {
   constructor() {
@@ -14,9 +15,10 @@ class TemplateService extends ApiService<Template> {
     );
     return response;
   }
-  async fetchContent(htmlPath: string): Promise<string> {
-    // This method should fetch the HTML content using the html_path received from convertUrl
-    const response = await this.get<string>(htmlPath);
+  async fetchContent(id: number): Promise<string> {
+    const response = await this.get<string>(
+      replaceParams(API_ENDPOINTS.templates.fetchContent.path, { id })
+    );
     return response;
   }
 }

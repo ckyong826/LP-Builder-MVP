@@ -24,6 +24,7 @@ export interface ConvertUrlRequest {
 }
 
 export interface ConvertUrlResponse {
+  id: number;
   message: string;
   conversion: Template;
   html_path: string;

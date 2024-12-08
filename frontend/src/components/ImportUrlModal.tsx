@@ -9,10 +9,12 @@ import { BASE_URL } from "@/api/constants";
 interface ImportUrlModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onImport: (
-    htmlContent: string,
-    assets: { css: string[]; js: string[]; images: string[] }
-  ) => void;
+  onImport: (content: {
+    html: string;
+    css: Record<string, string>;
+    js: Record<string, string>;
+    images: Record<string, Uint8Array>;
+  }) => void;
 }
 
 export function ImportUrlModal({
@@ -45,30 +47,23 @@ export function ImportUrlModal({
         );
       }
 
-      if (!data.html_path) {
-        throw new Error("HTML path not found in the conversion result");
-      }
+      const content = JSON.parse(await templateService.fetchContent(data.id));
 
-      const htmlPath = data.html_path.replace("./output", "/output");
-      const htmlContent = await templateService.fetchContent(htmlPath);
-
-      if (!htmlContent) {
+      if (!content.html) {
         throw new Error("Failed to fetch HTML content");
       }
 
-      const filePaths = JSON.parse(data.file_paths);
-
-      if (!filePaths || typeof filePaths !== "object") {
-        throw new Error("Invalid file paths data");
-      }
-
-      const convertedFilePaths = {
-        css: processFilePaths(filePaths.css),
-        js: processFilePaths(filePaths.js),
-        images: processFilePaths(filePaths.images),
-      };
-
-      onImport(htmlContent, convertedFilePaths);
+      onImport({
+        html: content.html,
+        css: content.css,
+        js: content.js,
+        images: Object.fromEntries(
+          Object.entries(content.images).map(([key, value]) => [
+            key,
+            new Uint8Array(Object.values(value as number[])),
+          ])
+        ),
+      });
       onClose();
     } catch (err: any) {
       console.error("Import error:", err);
@@ -76,13 +71,6 @@ export function ImportUrlModal({
     } finally {
       setLoading(false);
     }
-  };
-
-  // Helper function to process file paths
-  const processFilePaths = (paths: string[] = []): string[] => {
-    return paths.map(
-      (path) => `${BASE_URL}${path.replace("./output", "output")}`
-    );
   };
 
   return (

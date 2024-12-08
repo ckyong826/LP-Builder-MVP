@@ -32,6 +32,7 @@ func RegisterRoutes(router *gin.Engine, container *services.ServiceContainer) {
     {
         templates.GET("", templateController.FindAll)
         templates.GET("/:id", templateController.FindOneById)
+        templates.GET("/:id/content", templateController.GetTemplateContent)
         templates.POST("", templateController.Create)
         templates.POST("/convert", templateController.ConvertUrlToFile)  // Changed URL to match controller
         templates.PUT("/:id", templateController.Update)  // Changed from PATCH to PUT to match controller
