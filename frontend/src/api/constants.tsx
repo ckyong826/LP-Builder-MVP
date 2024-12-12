@@ -1,4 +1,4 @@
-export const BASE_URL = "http://localhost:8080";
+export const BASE_URL = "http://rnjoo-161-139-102-112.a.free.pinggy.link";
 
 // Define endpoint types for better type safety
 export type EndpointConfig = {
