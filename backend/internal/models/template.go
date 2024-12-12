@@ -21,7 +21,7 @@ type FileContent struct {
 	HTML   string            `json:"html"`
 	CSS    map[string]string `json:"css"`
 	JS     map[string]string `json:"js"`
-	Images map[string][]byte `json:"images"`
+	Images map[string]string `json:"images"` 
 }
 
 

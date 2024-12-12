@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { templateService } from "@/api/services/templateService";
-import { BASE_URL } from "@/api/constants";
+import { BASE_URL } from "@/api";
 
 interface ImportUrlModalProps {
   isOpen: boolean;
@@ -13,7 +13,7 @@ interface ImportUrlModalProps {
     html: string;
     css: Record<string, string>;
     js: Record<string, string>;
-    images: Record<string, Uint8Array>;
+    images: Record<string, string>;
   }) => void;
 }
 
@@ -47,23 +47,67 @@ export function ImportUrlModal({
         );
       }
 
-      const content = JSON.parse(await templateService.fetchContent(data.id));
+      const rawContent = await templateService.fetchContent(data.id);
+
+      let content;
+      try {
+        content =
+          typeof rawContent === "string" ? JSON.parse(rawContent) : rawContent;
+      } catch (parseError) {
+        console.error("JSON parse error:", parseError);
+        throw new Error("Invalid response format from server");
+      }
 
       if (!content.html) {
         throw new Error("Failed to fetch HTML content");
       }
 
+      let processedHtml = content.html;
+      const processedImages: Record<string, string> = {};
+
+      if (content.images) {
+        for (const [imagePath, imageUrl] of Object.entries(content.images)) {
+          const url = imageUrl as string;
+          try {
+            // Clean up the URL: replace backslashes with forward slashes
+            const cleanUrl = url.replace(/\\/g, "/");
+
+            // Check if URL is already absolute
+            const fullUrl = cleanUrl.startsWith("http")
+              ? cleanUrl
+              : `${BASE_URL}${cleanUrl.startsWith("/") ? "" : "/"}${cleanUrl}`;
+
+            // Remove any duplicated URLs in the path
+            const deduplicatedUrl = fullUrl.replace(
+              /http:\/\/[^/]+(.*?)\1$/,
+              "$1"
+            );
+
+            // Store the original path as key and the cleaned URL as value
+            processedImages[imagePath] = deduplicatedUrl;
+          } catch (error) {
+            console.error("Failed to process image:", error);
+          }
+        }
+      }
+      // Combine all CSS files into one
+      const combinedCss = Object.entries(content.css)
+        .map(([filename, content]) => `/* ${filename} */\n${content}`)
+        .join("\n\n");
+
+      // Combine all JS files into one
+      const combinedJs = Object.entries(content.js)
+        .map(([filename, content]) => `// ${filename}\n${content}`)
+        .join("\n\n");
+
+      // Pass the processed content to the parent component
       onImport({
-        html: content.html,
-        css: content.css,
-        js: content.js,
-        images: Object.fromEntries(
-          Object.entries(content.images).map(([key, value]) => [
-            key,
-            new Uint8Array(Object.values(value as number[])),
-          ])
-        ),
+        html: processedHtml,
+        css: { "combined.css": combinedCss },
+        js: { "combined.js": combinedJs },
+        images: processedImages,
       });
+
       onClose();
     } catch (err: any) {
       console.error("Import error:", err);

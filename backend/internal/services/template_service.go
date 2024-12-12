@@ -349,7 +349,7 @@ func (s *TemplateService) GetTemplateContent(ctx context.Context, templateID int
     content := &models.FileContent{
         CSS:    make(map[string]string),
         JS:     make(map[string]string),
-        Images: make(map[string][]byte),
+        Images: make(map[string]string),
     }
 
     // Read HTML content
@@ -385,11 +385,10 @@ func (s *TemplateService) GetTemplateContent(ctx context.Context, templateID int
 
     // Read image files
     for _, path := range filePaths["images"] {
-        imgContent, err := os.ReadFile(path)
-        if err != nil {
-            return nil, fmt.Errorf("failed to read image file %s: %w", path, err)
-        }
-        content.Images[filepath.Base(path)] = imgContent
+        relPath := strings.TrimPrefix(path, "output")
+        imageURL := "/static" + relPath
+        
+        content.Images[filepath.Base(path)] = imageURL
     }
 
     return content, nil

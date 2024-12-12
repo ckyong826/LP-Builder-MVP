@@ -40,7 +40,7 @@ export default function CustomEditor() {
     html: string;
     css: Record<string, string>;
     js: Record<string, string>;
-    images: Record<string, Uint8Array<ArrayBufferLike>>;
+    images: Record<string, string>; // Changed type to string URLs
   }) => {
     if (!editor) return;
 
@@ -49,44 +49,53 @@ export default function CustomEditor() {
       editor.setComponents("");
       editor.setStyle("");
 
-      // Load CSS files
-      const cssPromises = Object.entries(content.css).map(
-        async ([cssPath, cssContent]) => {
-          editor.setStyle(cssContent);
-        }
-      );
+      // Add images to asset manager and keep track of their new URLs
+      const assetManager = editor.AssetManager;
+      const imageUrlMap = new Map<string, string>();
 
-      // Load JS files
-      const jsPromises = Object.entries(content.js).map(
-        async ([jsPath, jsContent]) => {
-          editor.Components.addComponent({
-            type: "script",
-            content: jsContent,
-          });
-        }
-      );
+      // Process all images
+      for (const [originalUrl, imageUrl] of Object.entries(content.images)) {
+        // Add image to asset manager
+        assetManager.add({
+          src: imageUrl,
+          type: "image",
+        });
 
-      // Process images in HTML
-      Object.entries(content.images).forEach(([imagePath, imageContent]) => {
-        const filename = imagePath.split("/").pop();
-        // Replace image paths in HTML content
-        content.html = content.html.replace(
-          new RegExp(filename as string, "g"),
-          imagePath
-        );
+        // Store the mapping of original URL to new URL
+        imageUrlMap.set(originalUrl, imageUrl);
+      }
+
+      // Process HTML to replace image URLs
+      let processedHtml = content.html;
+      imageUrlMap.forEach((newUrl, originalUrl) => {
+        // Get filename from URL by removing path and query parameters
+        const filename = originalUrl.split("/").pop()?.split("?")[0];
+        if (!filename) return;
+
+        // Create a pattern that matches src attribute with any content
+        const pattern = new RegExp(`src=["'][^"']*${filename}[^"']*["']`, "g");
+
+        // Replace all occurrences
+        processedHtml = processedHtml.replace(pattern, `src="${newUrl}"`);
+      });
+      // Add combined CSS
+      const cssContent = Object.values(content.css)[0];
+      editor.setStyle(cssContent);
+
+      // Add combined JS
+      const jsContent = Object.values(content.js)[0];
+      editor.Components.addComponent({
+        type: "script",
+        content: jsContent,
       });
 
-      // Load HTML content
-      editor.setComponents(content.html);
-
-      // Wait for all assets to load
-      await Promise.all([...cssPromises, ...jsPromises]);
+      // Load processed HTML content
+      editor.setComponents(processedHtml);
 
       // Refresh the editor
       editor.refresh();
     } catch (error) {
       console.error("Error importing content:", error);
-      // You might want to add error handling UI here
     }
   };
 
@@ -100,9 +109,24 @@ export default function CustomEditor() {
           storageManager: false,
           container: "#gjs",
           fromElement: true,
+          deviceManager: {
+            devices: [
+              {
+                name: "Desktop",
+                width: "", // Default width
+              },
+              {
+                name: "Mobile",
+                width: "400px", // Adjust this value as needed
+                widthMedia: "375px", // This sets the CSS media query width
+              },
+            ],
+          },
           assetManager: {
             upload: false,
             assets: [],
+            embedAsBase64: true, // Add this line to enable base64 support
+            dropzone: true, // Optional: enables drag and drop of base64 images
           },
           styleManager: {
             sectors: [

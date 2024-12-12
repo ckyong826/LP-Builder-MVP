@@ -12,6 +12,9 @@ func RegisterRoutes(router *gin.Engine, container *services.ServiceContainer) {
     // CORS middleware
     router.Use(middleware.CORS())
 
+    // Serve static files from the "output" directory
+    router.Static("/static", "./output")
+
     // API version group
     api := router.Group("/api")
     
