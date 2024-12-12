@@ -24,8 +24,8 @@ func CORS() gin.HandlerFunc {
             "http://*.pinggy.io",
             "http://*.pinggy-ao.net",
 						"http://*.a.free.pinggy.link",
+						"https://lp-builder-mvp.vercel.app",
 						"https://lp-builder-mvp.vercel.app/",
-						
         }
     }
 
