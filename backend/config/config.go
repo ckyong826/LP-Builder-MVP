@@ -11,6 +11,7 @@ import (
 )
 
 type Config struct {
+	DBURL      string
 	DBHost     string
 	DBPort     string
 	DBUser     string
@@ -26,6 +27,7 @@ func LoadConfig() (*Config, error) {
     }
 
     config := &Config{
+        DBURL: getEnv("DB_URL", ""),
         DBHost:     getEnv("DB_HOST", "localhost"),
         DBPort:     getEnv("DB_PORT", "5432"),
         DBUser:     getEnv("DB_USER", "postgres"),
@@ -53,7 +55,17 @@ func (c *Config) GetDSN() string {
 
 // InitDB initializes the database connection
 func InitDB(cfg *Config) (*sql.DB, error) {
-    db, err := sql.Open("postgres", cfg.GetDSN())
+    var db *sql.DB
+    var err error
+    
+    if cfg.DBURL != "" {
+        // Use the URL directly if it exists
+        db, err = sql.Open("postgres", cfg.DBURL)
+    } else {
+        // Fall back to constructed DSN if no URL is provided
+        db, err = sql.Open("postgres", cfg.GetDSN())
+    }
+
     if err != nil {
         return nil, fmt.Errorf("error connecting to the database: %w", err)
     }
