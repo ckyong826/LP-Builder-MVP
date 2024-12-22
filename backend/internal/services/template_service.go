@@ -262,16 +262,18 @@ func (s *TemplateService) getHTML(urlStr string) (string, error) {
 func (s *TemplateService) extractAssets(html string) []string {
     var assets []string
     patterns := []string{
-        `<link.*?href="(.*?\.css)"`,
-        `<script.*?src="(.*?\.js)"`,
+        `<link[^>]*?href=["'](.*?\.css(?:\?[^"']*)?)"[^>]*>`,
+        `<script.*?src="(.*?\.js(?:\?[^"]*)?)"`,
         `<img.*?src="(.*?\.(jpg|jpeg|png|gif|svg))"`,
     }
     for _, pattern := range patterns {
         re := regexp.MustCompile(pattern)
         matches := re.FindAllStringSubmatch(html, -1)
         for _, match := range matches {
-            if len(match) > 1 {
-                assets = append(assets, match[1])
+            if len(match) > 1 && match[1] != "" {
+                // Remove query parameters for local file storage
+                asset := strings.Split(match[1], "?")[0]
+                assets = append(assets, asset)
             }
         }
     }
@@ -285,25 +287,36 @@ func (s *TemplateService) downloadAssets(baseDir, baseURL string, assets []strin
         return nil, fmt.Errorf("failed to parse base URL: %w", err)
     }
 
+    client := &http.Client{
+        Timeout: time.Second * 30,
+    }
+
     for _, asset := range assets {
         assetURL, err := url.Parse(asset)
         if err != nil {
-            return nil, fmt.Errorf("failed to parse asset URL %s: %w", asset, err)
+            continue // Skip invalid URLs instead of failing
         }
 
-        fullURL := base.ResolveReference(assetURL)
+        // Handle both relative and absolute URLs
+        var fullURL string
+        if assetURL.IsAbs() {
+            fullURL = asset
+        } else {
+            fullURL = base.ResolveReference(assetURL).String()
+        }
+
         var folder string
         var assetType string
 
         switch {
-        case strings.HasSuffix(asset, ".css"):
-            folder = filepath.Join(baseDir, "css")
+        case strings.HasSuffix(strings.Split(asset, "?")[0], ".css"):
+            folder = filepath.Join(baseDir, "assets/css")
             assetType = "css"
-        case strings.HasSuffix(asset, ".js"):
-            folder = filepath.Join(baseDir, "js")
+        case strings.HasSuffix(strings.Split(asset, "?")[0], ".js"):
+            folder = filepath.Join(baseDir, "assets/js")
             assetType = "js"
         default:
-            folder = filepath.Join(baseDir, "images")
+            folder = filepath.Join(baseDir, "assets/images")
             assetType = "images"
         }
 
@@ -311,9 +324,39 @@ func (s *TemplateService) downloadAssets(baseDir, baseURL string, assets []strin
             return nil, fmt.Errorf("failed to create folder %s: %w", folder, err)
         }
 
-        filename := filepath.Join(folder, filepath.Base(assetURL.Path))
-        if err := s.downloadFile(fullURL.String(), filename); err != nil {
-            return nil, fmt.Errorf("failed to download asset %s: %w", fullURL.String(), err)
+        // Clean filename and remove query parameters
+        cleanFilename := filepath.Base(strings.Split(assetURL.Path, "?")[0])
+        filename := filepath.Join(folder, cleanFilename)
+
+        // Download with proper HTTP client and headers
+        req, err := http.NewRequest("GET", fullURL, nil)
+        if err != nil {
+            continue // Skip failed requests
+        }
+
+        // Add common headers
+        req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
+        req.Header.Set("Accept", "*/*")
+        req.Header.Set("Accept-Language", "en-US,en;q=0.9")
+
+        resp, err := client.Do(req)
+        if err != nil {
+            continue // Skip failed downloads
+        }
+        defer resp.Body.Close()
+
+        if resp.StatusCode != http.StatusOK {
+            continue // Skip non-200 responses
+        }
+
+        out, err := os.Create(filename)
+        if err != nil {
+            continue
+        }
+        defer out.Close()
+
+        if _, err := io.Copy(out, resp.Body); err != nil {
+            continue
         }
 
         filePaths[assetType] = append(filePaths[assetType], filename)
